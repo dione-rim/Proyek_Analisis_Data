@@ -3,17 +3,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import streamlit as st
+import os
 
+# Konfigurasi Halaman
 st.set_page_config(page_title="E-commerce Dashboard", layout="wide")
 
 st.title('Analisis Data E-commerce: Volume Penjualan & Tren Pesanan')
 st.write('Aplikasi ini menganalisis kategori produk terlaris/terlemah dan tren pesanan bulanan dari dataset e-commerce.')
 
-# --- 1. Fungsi Pemuatan Data (VERSI MODIFIED UNTUK GITHUB) ---
+# --- 1. Fungsi Pemuatan Data ---
 @st.cache_data
 def load_data():
-    # Langsung panggil folder 'Data' yang ada di GitHub
-    # Pastikan huruf besar 'D' pada 'Data' sesuai dengan nama foldermu
+    # Menggunakan path relatif agar aman di GitHub/Streamlit Cloud
     df_orders = pd.read_csv("Data/orders_dataset.csv")
     df_items = pd.read_csv("Data/order_items_dataset.csv")
     df_products = pd.read_csv("Data/products_dataset.csv")
@@ -45,10 +46,15 @@ def clean_data(orders, items, products):
         
     return orders, items, products
 
-orders_df, order_items_df, products_df = clean_data(orders_df.copy(), order_items_df.copy(), products_df.copy())
+# --- EKSEKUSI PEMUATAN & PEMBERSIHAN ---
+# Langkah A: Load data mentah (Hasilnya ada 4 variabel)
+raw_orders, raw_items, raw_products, category_translation_df = load_data()
 
-st.subheader('2. Data Cleaning Status')
-st.write("Data telah dibersihkan: Kolom tanggal dikonversi, nilai null di `products_df` diisi.")
+# Langkah B: Bersihkan data (Hasilnya ada 3 variabel)
+orders_df, order_items_df, products_df = clean_data(raw_orders.copy(), raw_items.copy(), raw_products.copy())
+
+st.subheader('1. Status Data')
+st.success("Data Berhasil Dimuat dan Dibersihkan! ✅")
 
 # --- 3. Fungsi Penggabungan Data ---
 @st.cache_data
@@ -57,13 +63,15 @@ def merge_data(orders, items, products, category):
     merged_2 = pd.merge(merged_1, products, on='product_id', how='inner')
     final_merged = pd.merge(merged_2, category, on='product_category_name', how='left')
     
+    # Pastikan timestamp benar
     final_merged['order_purchase_timestamp'] = pd.to_datetime(final_merged['order_purchase_timestamp'])
     final_merged['purchase_year'] = final_merged['order_purchase_timestamp'].dt.year
     return final_merged
 
+# Jalankan penggabungan
 all_merged_df = merge_data(orders_df, order_items_df, products_df, category_translation_df)
 
-st.subheader('3. Merged Data (Sample)')
+st.subheader('2. Sampel Data Gabungan')
 st.dataframe(all_merged_df.head(), use_container_width=True)
 
 # --- 4. Pertanyaan Bisnis 1: Kategori Produk ---
@@ -92,8 +100,8 @@ with col2:
 # --- 5. Pertanyaan Bisnis 2: Tren Pesanan Bulanan ---
 st.header('Pertanyaan Bisnis 2: Tren Pesanan Bulanan')
 
-all_merged_df['purchase_month'] = all_merged_df['order_purchase_timestamp'].dt.to_period('M')
-monthly_orders = all_merged_df.groupby(['purchase_year', 'purchase_month'])['order_id'].nunique().reset_index()
+all_merged_df['purchase_month_period'] = all_merged_df['order_purchase_timestamp'].dt.to_period('M')
+monthly_orders = all_merged_df.groupby(['purchase_year', 'purchase_month_period'])['order_id'].nunique().reset_index()
 monthly_orders.columns = ['year', 'month', 'total_orders']
 monthly_orders['month'] = monthly_orders['month'].astype(str)
 
@@ -115,4 +123,7 @@ rfm_df = all_merged_df.groupby('customer_id').agg(
 ).reset_index()
 
 st.dataframe(rfm_df.head(), use_container_width=True)
-st.success('Alhamdulillah, Analisis Streamlit Jalan Sempurna! 🎉')
+
+st.divider()
+st.success('Alhamdulillah, Dashboard Berhasil Dijalankan! 🚀✨')
+st.caption('Copyright © 2026 Dione Raissa Ivana Matany')
