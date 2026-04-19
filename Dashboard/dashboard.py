@@ -9,23 +9,17 @@ st.set_page_config(page_title="E-commerce Dashboard", layout="wide")
 st.title('Analisis Data E-commerce: Volume Penjualan & Tren Pesanan')
 st.write('Aplikasi ini menganalisis kategori produk terlaris/terlemah dan tren pesanan bulanan dari dataset e-commerce.')
 
-# --- 1. Fungsi Pemuatan Data (ABSOLUTE PATH) ---
+# --- 1. Fungsi Pemuatan Data (VERSI MODIFIED UNTUK GITHUB) ---
 @st.cache_data
 def load_data():
-    base_path = "C:/Users/Dione/OneDrive/Dokumen/Analisis Data Dione Raissa Ivana Matany/Data"
-    
-    df_orders = pd.read_csv(f"{base_path}/orders_dataset.csv")
-    df_items = pd.read_csv(f"{base_path}/order_items_dataset.csv")
-    df_products = pd.read_csv(f"{base_path}/products_dataset.csv")
-    df_category = pd.read_csv(f"{base_path}/product_category_name_translation.csv")
+    # Langsung panggil folder 'Data' yang ada di GitHub
+    # Pastikan huruf besar 'D' pada 'Data' sesuai dengan nama foldermu
+    df_orders = pd.read_csv("Data/orders_dataset.csv")
+    df_items = pd.read_csv("Data/order_items_dataset.csv")
+    df_products = pd.read_csv("Data/products_dataset.csv")
+    df_category = pd.read_csv("Data/product_category_name_translation.csv")
     
     return df_orders, df_items, df_products, df_category
-
-# INI BARIS YANG TADI HILANG: Memanggil fungsinya
-orders_df, order_items_df, products_df, category_translation_df = load_data()
-
-st.subheader('1. Data Loaded (Sample)')
-st.dataframe(orders_df.head(), use_container_width=True)
 
 # --- 2. Fungsi Pembersihan Data ---
 @st.cache_data
