@@ -38,4 +38,10 @@ Untuk menjalankan dashboard secara lokal, ikuti langkah berikut:
    Pastikan Anda memiliki Python terinstal dan disarankan menggunakan Virtual Environment.
    ```bash
    python -m venv .venv
-   .venv\Scripts\activate  # Untuk Windows
+   .venv\Scripts\activate  
+
+   Gunakan perintah ini untuk menginstal semua library yang dibutuhkan:
+   pip install -r requirements.txt
+
+   Jalankan perintah Streamlit dengan mengarahkan ke lokasi file dashboard.py:
+   streamlit run Dashboard/dashboard.py
