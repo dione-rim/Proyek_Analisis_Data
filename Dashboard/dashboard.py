@@ -3,82 +3,66 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import streamlit as st
-import os
 
 # Konfigurasi Halaman
 st.set_page_config(page_title="E-commerce Dashboard", layout="wide")
 
-st.title('Analisis Data E-commerce: Volume Penjualan & Tren Pesanan')
-st.write('Aplikasi ini menganalisis kategori produk terlaris/terlemah dan tren pesanan bulanan dari dataset e-commerce.')
-
 # --- 1. Fungsi Pemuatan Data ---
 @st.cache_data
 def load_data():
-    # Menggunakan path relatif agar aman di GitHub/Streamlit Cloud
     df_orders = pd.read_csv("Data/orders_dataset.csv")
     df_items = pd.read_csv("Data/order_items_dataset.csv")
     df_products = pd.read_csv("Data/products_dataset.csv")
     df_category = pd.read_csv("Data/product_category_name_translation.csv")
-    
     return df_orders, df_items, df_products, df_category
 
 # --- 2. Fungsi Pembersihan Data ---
 @st.cache_data
 def clean_data(orders, items, products):
-    datetime_cols = [
-        "order_purchase_timestamp", "order_approved_at",
-        "order_delivered_carrier_date", "order_delivered_customer_date",
-        "order_estimated_delivery_date"
-    ]
+    datetime_cols = ["order_purchase_timestamp", "order_approved_at", "order_delivered_customer_date"]
     for col in datetime_cols:
         orders[col] = pd.to_datetime(orders[col], errors='coerce')
-
-    items["shipping_limit_date"] = pd.to_datetime(items["shipping_limit_date"], errors='coerce')
-
     products["product_category_name"].fillna("unknown", inplace=True)
-    numerical_cols = [
-        "product_name_lenght", "product_description_lenght",
-        "product_photos_qty", "product_weight_g",
-        "product_length_cm", "product_height_cm", "product_width_cm"
-    ]
-    for col in numerical_cols:
-        products[col].fillna(0, inplace=True)
-        
     return orders, items, products
 
-# --- EKSEKUSI PEMUATAN & PEMBERSIHAN ---
-# Langkah A: Load data mentah (Hasilnya ada 4 variabel)
+# --- LOAD DATA ---
 raw_orders, raw_items, raw_products, category_translation_df = load_data()
-
-# Langkah B: Bersihkan data (Hasilnya ada 3 variabel)
 orders_df, order_items_df, products_df = clean_data(raw_orders.copy(), raw_items.copy(), raw_products.copy())
 
-st.subheader('1. Status Data')
-st.success("Data Berhasil Dimuat dan Dibersihkan! ✅")
+# --- MERGE DATA ---
+merged_df = pd.merge(orders_df, order_items_df, on='order_id', how='inner')
+merged_df = pd.merge(merged_df, products_df, on='product_id', how='inner')
+all_merged_df = pd.merge(merged_df, category_translation_df, on='product_category_name', how='left')
 
-# --- 3. Fungsi Penggabungan Data ---
-@st.cache_data
-def merge_data(orders, items, products, category):
-    merged_1 = pd.merge(orders, items, on='order_id', how='inner')
-    merged_2 = pd.merge(merged_1, products, on='product_id', how='inner')
-    final_merged = pd.merge(merged_2, category, on='product_category_name', how='left')
-    
-    # Pastikan timestamp benar
-    final_merged['order_purchase_timestamp'] = pd.to_datetime(final_merged['order_purchase_timestamp'])
-    final_merged['purchase_year'] = final_merged['order_purchase_timestamp'].dt.year
-    return final_merged
+# ==========================================
+# SIDEBAR FILTER (INI YANG DIMINTA REVIEWER)
+# ==========================================
+st.sidebar.header("Filter Dashboard")
 
-# Jalankan penggabungan
-all_merged_df = merge_data(orders_df, order_items_df, products_df, category_translation_df)
+# Filter Rentang Tanggal
+min_date = all_merged_df["order_purchase_timestamp"].min().date()
+max_date = all_merged_df["order_purchase_timestamp"].max().date()
 
-st.subheader('2. Sampel Data Gabungan')
-st.dataframe(all_merged_df.head(), use_container_width=True)
+start_date, end_date = st.sidebar.date_input(
+    label='Rentang Waktu',
+    min_value=min_date,
+    max_value=max_date,
+    value=[min_date, max_date]
+)
 
-# --- 4. Pertanyaan Bisnis 1: Kategori Produk ---
-st.header('Pertanyaan Bisnis 1: Kategori Produk Terlaris dan Terlemah')
+# Menghubungkan Filter ke Dataframe
+main_df = all_merged_df[(all_merged_df["order_purchase_timestamp"] >= str(start_date)) & 
+                       (all_merged_df["order_purchase_timestamp"] <= str(end_date))]
 
-data_2016_2018 = all_merged_df[(all_merged_df['purchase_year'] >= 2016) & (all_merged_df['purchase_year'] <= 2018)]
-category_sales = data_2016_2018.groupby('product_category_name_english')['order_id'].nunique().reset_index()
+# ==========================================
+# MAIN DASHBOARD
+# ==========================================
+st.title('Analisis Data E-commerce 📊')
+
+# Pertanyaan 1: Kategori Produk
+st.header('Kategori Produk Terlaris dan Terlemah')
+
+category_sales = main_df.groupby('product_category_name_english')['order_id'].nunique().reset_index()
 category_sales.columns = ['product_category', 'sales_volume']
 
 top_5 = category_sales.sort_values(by='sales_volume', ascending=False).head(5)
@@ -86,44 +70,25 @@ bottom_5 = category_sales.sort_values(by='sales_volume', ascending=True).head(5)
 
 col1, col2 = st.columns(2)
 with col1:
-    st.subheader('Top 5 Kategori (2016-2018)')
+    st.subheader('Top 5 Kategori')
     fig1, ax1 = plt.subplots(figsize=(8, 5))
     sns.barplot(x='sales_volume', y='product_category', data=top_5, palette='viridis', ax=ax1)
     st.pyplot(fig1)
 
 with col2:
-    st.subheader('Bottom 5 Kategori (2016-2018)')
+    st.subheader('Bottom 5 Kategori')
     fig2, ax2 = plt.subplots(figsize=(8, 5))
     sns.barplot(x='sales_volume', y='product_category', data=bottom_5, palette='magma', ax=ax2)
     st.pyplot(fig2)
 
-# --- 5. Pertanyaan Bisnis 2: Tren Pesanan Bulanan ---
-st.header('Pertanyaan Bisnis 2: Tren Pesanan Bulanan')
-
-all_merged_df['purchase_month_period'] = all_merged_df['order_purchase_timestamp'].dt.to_period('M')
-monthly_orders = all_merged_df.groupby(['purchase_year', 'purchase_month_period'])['order_id'].nunique().reset_index()
-monthly_orders.columns = ['year', 'month', 'total_orders']
-monthly_orders['month'] = monthly_orders['month'].astype(str)
+# Pertanyaan 2: Tren Pesanan
+st.header('Tren Pesanan Bulanan')
+main_df['month'] = main_df['order_purchase_timestamp'].dt.to_period('M').astype(str)
+monthly_orders = main_df.groupby('month')['order_id'].nunique().reset_index()
 
 fig3, ax3 = plt.subplots(figsize=(15, 6))
-sns.lineplot(data=monthly_orders, x='month', y='total_orders', hue='year', marker='o', ax=ax3)
+sns.lineplot(data=monthly_orders, x='month', y='order_id', marker='o', ax=ax3)
 plt.xticks(rotation=45)
-plt.grid(True)
 st.pyplot(fig3)
 
-# --- 6. RFM Analysis ---
-st.header('Analisis Lanjutan: Persiapan RFM Analysis')
-all_merged_df['total_item_price'] = all_merged_df['price'] + all_merged_df['freight_value']
-current_date = all_merged_df['order_purchase_timestamp'].max()
-
-rfm_df = all_merged_df.groupby('customer_id').agg(
-    Recency=('order_purchase_timestamp', lambda date: (current_date - date.max()).days),
-    Frequency=('order_id', 'nunique'),
-    Monetary=('total_item_price', 'sum')
-).reset_index()
-
-st.dataframe(rfm_df.head(), use_container_width=True)
-
-st.divider()
-st.success('Alhamdulillah, Dashboard Berhasil Dijalankan! 🚀✨')
-st.caption('Copyright © 2026 Dione Raissa Ivana Matany')
+st.success(f'Data ditampilkan untuk rentang {start_date} hingga {end_date}')
