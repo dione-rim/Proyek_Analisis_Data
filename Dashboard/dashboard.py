@@ -1,89 +1,84 @@
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import streamlit as st
 
 # Konfigurasi Halaman
-st.set_page_config(page_title="E-commerce Dashboard", layout="wide")
+st.set_page_config(page_title="E-commerce Analysis Dashboard", layout="wide")
 
-# --- 1. Fungsi Pemuatan Data ---
+# --- 1. Load Data ---
 @st.cache_data
 def load_data():
-    df_orders = pd.read_csv("Data/orders_dataset.csv")
-    df_items = pd.read_csv("Data/order_items_dataset.csv")
-    df_products = pd.read_csv("Data/products_dataset.csv")
-    df_category = pd.read_csv("Data/product_category_name_translation.csv")
-    return df_orders, df_items, df_products, df_category
+    df = pd.read_csv("Dashboard/main_data.csv")
+    df["order_purchase_timestamp"] = pd.to_datetime(df["order_purchase_timestamp"])
+    return df
 
-# --- 2. Fungsi Pembersihan Data ---
-@st.cache_data
-def clean_data(orders, items, products):
-    datetime_cols = ["order_purchase_timestamp", "order_approved_at", "order_delivered_customer_date"]
-    for col in datetime_cols:
-        orders[col] = pd.to_datetime(orders[col], errors='coerce')
-    products["product_category_name"].fillna("unknown", inplace=True)
-    return orders, items, products
+all_merged_df = load_data()
 
-# --- LOAD DATA ---
-raw_orders, raw_items, raw_products, category_translation_df = load_data()
-orders_df, order_items_df, products_df = clean_data(raw_orders.copy(), raw_items.copy(), raw_products.copy())
-
-# --- MERGE DATA ---
-merged_df = pd.merge(orders_df, order_items_df, on='order_id', how='inner')
-merged_df = pd.merge(merged_df, products_df, on='product_id', how='inner')
-all_merged_df = pd.merge(merged_df, category_translation_df, on='product_category_name', how='left')
-
+# --- 2. Sidebar Filters ---
+st.sidebar.image("https://github.com/dicodingacademy/assets/raw/main/logo.png")
 st.sidebar.header("Filter Dashboard")
 
+# Kontrol 1: Date Input
 min_date = all_merged_df["order_purchase_timestamp"].min().date()
 max_date = all_merged_df["order_purchase_timestamp"].max().date()
-
 start_date, end_date = st.sidebar.date_input(
-    label='Rentang Waktu',
-    min_value=min_date,
-    max_value=max_date,
-    value=[min_date, max_date]
+    "Rentang Waktu", [min_date, max_date], min_value=min_date, max_value=max_date
 )
 
-main_df = all_merged_df[(all_merged_df["order_purchase_timestamp"] >= str(start_date)) & 
-                       (all_merged_df["order_purchase_timestamp"] <= str(end_date))]
+# Kontrol 2: Selectbox untuk Order Status (Terhubung ke Dataframe)
+status_options = ["All"] + list(all_merged_df["order_status"].unique())
+selected_status = st.sidebar.selectbox("Pilih Status Pesanan", status_options)
 
-# ==========================================
-# MAIN DASHBOARD
-# ==========================================
-st.title('Analisis Data E-commerce 📊')
+# --- 3. Filtering Logic ---
+main_df = all_merged_df[
+    (all_merged_df["order_purchase_timestamp"] >= pd.to_datetime(start_date)) &
+    (all_merged_df["order_purchase_timestamp"] <= pd.to_datetime(end_date))
+]
 
-# Pertanyaan 1: Kategori Produk
-st.header('Kategori Produk Terlaris dan Terlemah')
+if selected_status != "All":
+    main_df = main_df[main_df["order_status"] == selected_status]
 
-category_sales = main_df.groupby('product_category_name_english')['order_id'].nunique().reset_index()
-category_sales.columns = ['product_category', 'sales_volume']
+# --- 4. Main Dashboard UI ---
+st.title("Analisis Data E-commerce 📊")
 
-top_5 = category_sales.sort_values(by='sales_volume', ascending=False).head(5)
-bottom_5 = category_sales.sort_values(by='sales_volume', ascending=True).head(5)
+# Visualization 1: Product Categories
+st.header("Kategori Produk Terlaris & Terendah")
+category_sales = main_df.groupby("product_category_name_english")["order_id"].nunique().reset_index()
+category_sales.columns = ["product_category", "sales_volume"]
+
+top_5 = category_sales.sort_values("sales_volume", ascending=False).head(5)
+bottom_5 = category_sales.sort_values("sales_volume", ascending=True).head(5)
 
 col1, col2 = st.columns(2)
 with col1:
-    st.subheader('Top 5 Kategori')
-    fig1, ax1 = plt.subplots(figsize=(8, 5))
-    sns.barplot(x='sales_volume', y='product_category', data=top_5, palette='viridis', ax=ax1)
-    st.pyplot(fig1)
+    st.subheader("Top 5 Product Categories")
+    fig, ax = plt.subplots(figsize=(10, 6))
+    sns.barplot(x="sales_volume", y="product_category", data=top_5, palette="Blues_r", ax=ax)
+    ax.set_xlabel("Jumlah Pesanan")
+    ax.set_ylabel(None)
+    st.pyplot(fig)
 
 with col2:
-    st.subheader('Bottom 5 Kategori')
-    fig2, ax2 = plt.subplots(figsize=(8, 5))
-    sns.barplot(x='sales_volume', y='product_category', data=bottom_5, palette='magma', ax=ax2)
-    st.pyplot(fig2)
+    st.subheader("Bottom 5 Product Categories")
+    fig, ax = plt.subplots(figsize=(10, 6))
+    sns.barplot(x="sales_volume", y="product_category", data=bottom_5.sort_values("sales_volume", ascending=False), palette="Reds_r", ax=ax)
+    ax.set_xlabel("Jumlah Pesanan")
+    ax.set_ylabel(None)
+    ax.yaxis.tick_right()
+    st.pyplot(fig)
 
-# Pertanyaan 2: Tren Pesanan
-st.header('Tren Pesanan Bulanan')
-main_df['month'] = main_df['order_purchase_timestamp'].dt.to_period('M').astype(str)
-monthly_orders = main_df.groupby('month')['order_id'].nunique().reset_index()
+# Visualization 2: Monthly Trend
+st.header("Tren Pesanan Bulanan")
+main_df["month_year"] = main_df["order_purchase_timestamp"].dt.to_period("M").astype(str)
+monthly_trend = main_df.groupby("month_year")["order_id"].nunique().reset_index()
 
-fig3, ax3 = plt.subplots(figsize=(15, 6))
-sns.lineplot(data=monthly_orders, x='month', y='order_id', marker='o', ax=ax3)
+fig, ax = plt.subplots(figsize=(16, 6))
+sns.lineplot(data=monthly_trend, x="month_year", y="order_id", marker="o", color="#90CAF9", ax=ax)
 plt.xticks(rotation=45)
-st.pyplot(fig3)
+plt.title("Volume Pesanan per Bulan", fontsize=15)
+plt.xlabel("Bulan")
+plt.ylabel("Jumlah Pesanan")
+st.pyplot(fig)
 
-st.success(f'Data ditampilkan untuk rentang {start_date} hingga {end_date}')
+st.caption("Dione Raissa Ivana Matany 2026")
