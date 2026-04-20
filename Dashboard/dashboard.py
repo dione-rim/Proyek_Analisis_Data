@@ -34,12 +34,8 @@ merged_df = pd.merge(orders_df, order_items_df, on='order_id', how='inner')
 merged_df = pd.merge(merged_df, products_df, on='product_id', how='inner')
 all_merged_df = pd.merge(merged_df, category_translation_df, on='product_category_name', how='left')
 
-# ==========================================
-# SIDEBAR FILTER (INI YANG DIMINTA REVIEWER)
-# ==========================================
 st.sidebar.header("Filter Dashboard")
 
-# Filter Rentang Tanggal
 min_date = all_merged_df["order_purchase_timestamp"].min().date()
 max_date = all_merged_df["order_purchase_timestamp"].max().date()
 
@@ -50,7 +46,6 @@ start_date, end_date = st.sidebar.date_input(
     value=[min_date, max_date]
 )
 
-# Menghubungkan Filter ke Dataframe
 main_df = all_merged_df[(all_merged_df["order_purchase_timestamp"] >= str(start_date)) & 
                        (all_merged_df["order_purchase_timestamp"] <= str(end_date))]
 
